@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Field Desk",
+  "short_name": "Field Desk",
+  "description": "Field work and service report management for the Ocellus team.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f7f9",
+  "theme_color": "#174a3b",
+  "icons": [
+    {
+      "src": "/icons/field-desk-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/field-desk-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

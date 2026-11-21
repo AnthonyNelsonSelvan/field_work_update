@@ -1,0 +1,56 @@
+services:
+  fielddesk-frontend:
+    image: ocellusdocker/field-desk-frontend:latest
+    container_name: fielddesk-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_INVOICE_APP_URL: ${INVOICE_APP_URL:?Set INVOICE_APP_URL}
+    restart: always
+    depends_on:
+      fielddesk-backend:
+        condition: service_healthy
+    networks:
+      global-network:
+        aliases:
+          - fielddesk-frontend
+    expose:
+      - "80"
+
+  fielddesk-backend:
+    image: ocellusdocker/field-desk-backend:latest
+    container_name: fielddesk-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      MONGO_URI: ${MONGO_URI:?Set the Invoice MongoDB URI reachable on its internal network}
+      JWT_SECRET: ${JWT_SECRET:?Set the same JWT_SECRET as Invoice Generator}
+      NODE_ENV: production
+      PORT: 3001
+      CORS_ORIGIN: ${FIELD_DESK_URL:?Set FIELD_DESK_URL}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:?Set the shared parent cookie domain}
+      DAILY_REMINDER_HOUR: ${DAILY_REMINDER_HOUR:-9}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Set the VAPID public key}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Set the VAPID private key}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:?Set a VAPID contact email}
+    networks:
+      global-network:
+        aliases:
+          - fielddesk-backend
+      invoice-internal:
+        aliases:
+          - fielddesk-backend
+    expose:
+      - "3001"
+
+networks:
+  global-network:
+    external: true
+    name: global-network
+  invoice-internal:
+    external: true
+    name: ${INVOICE_DOCKER_NETWORK:?Set the actual Invoice app-network name from docker network ls}
