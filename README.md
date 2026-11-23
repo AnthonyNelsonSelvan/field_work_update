@@ -5,11 +5,11 @@ Phone-first work tracker. Service Call Reports open the real Ocellus Invoice Gen
 
 Local setup
 -----------
-1. Copy each backend .env.example to .env. Use the same MONGO_URI and the exact same JWT_SECRET in both backends. The Invoice Generator backend signs the shared token cookie; Field Desk verifies it against the same secret.
+1. Copy each backend .env.example to .env. Use the same MONGO_URI and the exact same JWT_SECRET in both backends. Field Desk checks credentials against the shared Invoice Generator employees collection and issues a compatible token cookie signed with the same JWT_SECRET.
 2. Start the Invoice Generator backend on port 3000 and frontend on port 5173. Start Field Desk backend on port 3001 and frontend on port 5174. Set each backend CORS_ORIGIN to its frontend origin. Frontend VITE_* values are build-time settings, so set them in the deployment environment before building.
 3. Generate a VAPID pair in the Field Desk backend with npx web-push generate-vapid-keys, then set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and a real VAPID_SUBJECT email in its environment. Keep the private key server-only.
-4. In production, host both frontends and APIs under one parent domain, for example invoice.example.com, field.example.com, api-invoice.example.com, and api-field.example.com. Set COOKIE_DOMAIN=.example.com in both backends, use the exact same JWT_SECRET and MONGO_URI in both backends, and set VITE_INVOICE_APP_URL and VITE_FIELD_DESK_URL to the deployed frontend origins. Both apps must use HTTPS. If the apps use unrelated domains, the browser cannot share this cookie; use a shared parent domain or a central auth proxy.
-5. Sign in to Field Desk with an Invoice Generator account. Invoice roles admin, accountant, and superAdmin map to Field Desk Admin; staff maps to Worker. Field Desk admins can create staff accounts from the Team section; those accounts are created in the shared Invoice Generator employees collection and can sign into either app.
+4. In production, host both frontends and APIs under one parent domain, for example invoice.example.com, field.example.com, api-invoice.example.com, and api-field.example.com. Set COOKIE_DOMAIN=.example.com in both backends, use the exact same JWT_SECRET and MONGO_URI in both backends, and set VITE_INVOICE_APP_URL to the deployed Invoice Generator frontend origin. Both apps must use HTTPS. If the apps use unrelated domains, the browser cannot share this cookie; use a shared parent domain or a central auth proxy.
+5. Sign in on Field Desk’s own login screen with an Invoice Generator account. Invoice roles admin, accountant, and superAdmin map to Field Desk Admin; staff maps to Worker. Field Desk admins can create staff accounts from the Team section; those accounts are created in the shared Invoice Generator employees collection and can sign into either app.
 
 Work access
 -----------
@@ -27,7 +27,7 @@ Field Desk now has its own frontend and backend containers in docker-compose.yml
 
 1. Copy docker-compose.env.example to .env beside docker-compose.yml. On the server run docker network ls and set INVOICE_DOCKER_NETWORK to the actual Compose-created network name used by Invoice app-network. The Invoice compose network is project-prefixed unless its name was explicitly set.
 2. Set MONGO_URI to the Invoice database address reachable from that network (usually mongodb://mongodb:27017/Invoice), and copy the exact Invoice JWT_SECRET. Set COOKIE_DOMAIN to the shared domain (for example .ocellus.co.in), plus the Field Desk and Invoice frontend URLs. Configure the VAPID pair and subject email. Keep the VAPID private key and Docker credentials out of source control.
-3. In the Invoice compose deployment, pass COOKIE_DOMAIN to the backend and build the Invoice frontend with VITE_FIELD_DESK_URL set to the Field Desk frontend origin. Rebuild/redeploy that frontend after changing the build argument.
+3. In the Invoice compose deployment, pass COOKIE_DOMAIN to its backend so its login and logout cookies share the parent domain. No Invoice login redirect build argument is needed for Field Desk sign-in.
 4. Configure the server reverse proxy on global-network to send the Field Desk hostname to fielddesk-frontend:80. The Field Desk Nginx container handles /api and proxies it to fielddesk-backend:3001.
 5. Start the separate Field Desk Compose project on the same Docker host with docker compose up -d --build. Keep the backend running for daily scheduled reminders.
 

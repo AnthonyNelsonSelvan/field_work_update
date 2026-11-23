@@ -39,6 +39,10 @@ function App() {
     [form, setForm] = useState({ completedAt: today() }),
     [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [loginName, setLoginName] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [loginBusy, setLoginBusy] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const isAdmin = user?.role === "admin";
@@ -62,12 +66,6 @@ function App() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
-  useEffect(() => {
-    if (loading || user) return;
-    const loginUrl = new URL("/admin/login/onlyAdmins", INVOICE_APP_URL);
-    loginUrl.searchParams.set("returnTo", window.location.href);
-    window.location.replace(loginUrl.toString());
-  }, [loading, user]);
   useEffect(() => {
     load();
   }, [load]);
@@ -114,6 +112,23 @@ function App() {
     );
   const openServiceReports = () =>
     window.location.assign(new URL("/admin/service-call-reports", INVOICE_APP_URL).toString());
+  const signIn = async (event) => {
+    event.preventDefault();
+    setError("");
+    setLoginBusy(true);
+    try {
+      const { data } = await api.post("/auth/login", {
+        name: loginName.trim(),
+        password: loginPassword,
+      });
+      setUser(data.user);
+      setLoginPassword("");
+    } catch (e) {
+      setError(e.response?.data?.message || "Could not sign in. Check your username and password.");
+    } finally {
+      setLoginBusy(false);
+    }
+  };
   const logout = async () => {
     await api.post("/auth/logout");
     setUser(null);
@@ -225,12 +240,42 @@ function App() {
   if (!user)
     return (
       <main className="login-wrap">
-        <section className="login card">
+        <form className="login card" onSubmit={signIn}>
           <div className="brandmark">FD</div>
           <p className="eyebrow">OCELLUS · FIELD TEAM</p>
-          <h1>Opening shared sign in…</h1>
-          <p className="muted">Use your Invoice Generator account to continue.</p>
-        </section>
+          <h1>Sign in to Field Desk</h1>
+          <p className="muted">Use your work account to view assigned jobs and service reports.</p>
+          {error && <div className="error" role="alert">{error}</div>}
+          <label htmlFor="login-name">Username</label>
+          <input
+            id="login-name"
+            name="username"
+            autoComplete="username"
+            value={loginName}
+            onChange={(event) => setLoginName(event.target.value)}
+            required
+            autoFocus
+          />
+          <label htmlFor="login-password">Password</label>
+          <div className="password-field">
+            <input
+              id="login-password"
+              name="password"
+              type={showLoginPassword ? "text" : "password"}
+              autoComplete="current-password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              required
+            />
+            <button type="button" className="password-toggle" onClick={() => setShowLoginPassword((value) => !value)} aria-label={showLoginPassword ? "Hide password" : "Show password"}>
+              {showLoginPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+          <button className="primary full" type="submit" disabled={loginBusy}>
+            {loginBusy ? "Signing in…" : "Sign in"}
+          </button>
+          <p className="login-footnote">Your Field Desk account is managed by your administrator.</p>
+        </form>
       </main>
     );
   return (

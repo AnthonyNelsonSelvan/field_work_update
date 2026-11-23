@@ -39,3 +39,5 @@ html,body,#root,.app{width:210mm!important;height:297mm!important;min-height:0!i
 .official-sign-content img.official-stamp{width:auto;height:auto;max-width:29mm;max-height:14mm;border:0;border-radius:0;object-fit:contain}
 
 .success{padding:11px 13px;background:#eaf5ee;color:#23764c;border-radius:8px;margin:12px 0;font-size:12px}
+
+.password-field{position:relative}.password-field input{padding-right:64px!important}.password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-20%);border:0;background:transparent;color:#174a3b;font-size:12px;font-weight:700;padding:6px}.login-footnote{margin:18px 0 0;text-align:center;color:#8a929d;font-size:11px}

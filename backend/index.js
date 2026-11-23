@@ -4,6 +4,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import crypto from "node:crypto";
 import argon2 from "argon2";
 import { createRequire } from "node:module";
 
@@ -14,6 +15,8 @@ import Work from "./model/WorkItem.js";
 import Note from "./model/Notification.js";
 import InvoiceEmployee from "./model/InvoiceEmployee.js";
 import PushSubscription from "./model/PushSubscription.js";
+const loginAttempts = new Map();
+
 const app = express(),
   port = Number(process.env.PORT || 3001),
   secret = process.env.JWT_SECRET;
@@ -175,6 +178,45 @@ app.post("/api/auth/logout", (q, s) => {
   s.clearCookie("csrfToken", { ...options, httpOnly: false });
   s.json({ ok: true });
 });
+app.post(
+  "/api/auth/login",
+  route(async (q, s) => {
+    const name = String(q.body?.name || "").trim();
+    const password = String(q.body?.password || "");
+    if (!name || !password)
+      return s.status(400).json({ message: "Enter your username and password." });
+
+    const now = Date.now();
+    const key = q.ip || q.socket.remoteAddress || "unknown";
+    const previous = loginAttempts.get(key);
+    if (previous && now - previous.startedAt < 15 * 60 * 1000 && previous.count >= 10)
+      return s.status(429).json({ message: "Too many sign-in attempts. Try again in 15 minutes." });
+    if (!previous || now - previous.startedAt >= 15 * 60 * 1000)
+      loginAttempts.set(key, { startedAt: now, count: 1 });
+    else previous.count += 1;
+
+    const employee = await InvoiceEmployee.findOne({ name }).select("name role password");
+    if (!employee?.password || !(await argon2.verify(employee.password, password)))
+      return s.status(401).json({ message: "Username or password is incorrect." });
+    const invoiceRole = normalizeInvoiceRole(employee.role);
+    const role = appRoleFor(invoiceRole);
+    if (!role)
+      return s.status(403).json({ message: "This account cannot use Field Desk." });
+
+    loginAttempts.delete(key);
+    const employeeId = String(employee._id);
+    const token = jwt.sign(
+      { _id: employeeId, id: employeeId, name: employee.name, role: invoiceRole },
+      secret,
+      { expiresIn: "1d" },
+    );
+    const csrfToken = crypto.randomBytes(32).toString("hex");
+    const cookieOptions = { ...cookie, path: "/" };
+    s.cookie("token", token, cookieOptions);
+    s.cookie("csrfToken", csrfToken, { ...cookieOptions, httpOnly: false });
+    s.json({ user: { name: employee.name, role } });
+  }),
+);
 app.get(
   "/api/auth/me",
   auth,
