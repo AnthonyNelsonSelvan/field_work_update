@@ -5,7 +5,10 @@ import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import argon2 from "argon2";
-import webpush from "web-push";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const webpush = require("web-push");
 import User from "./model/WorkerUser.js";
 import Work from "./model/WorkItem.js";
 import Note from "./model/Notification.js";
