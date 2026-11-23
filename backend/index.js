@@ -529,7 +529,7 @@ function schedule() {
       console.error("Reminder failed", e);
     }
     schedule();
-  }, next - t);
+  }, Math.max(0, next.getTime() - Date.now()));
 }
 await mongoose.connect(process.env.MONGO_URI);
 await migrateLegacyWorkers();
