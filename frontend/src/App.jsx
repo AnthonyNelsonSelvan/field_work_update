@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { filterWorkItems, getAssignmentLabel } from "./utils/workFilters.js";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 const INVOICE_APP_URL = import.meta.env.VITE_INVOICE_APP_URL || "http://localhost:5173";
 const api = axios.create({
@@ -31,6 +32,8 @@ function App() {
         : "work",
     ),
     [status, setStatus] = useState("pending"),
+    [searchTerm, setSearchTerm] = useState(""),
+    [assignmentFilter, setAssignmentFilter] = useState("all"),
     [works, setWorks] = useState([]),
     [users, setUsers] = useState([]),
     [notes, setNotes] = useState([]),
@@ -102,6 +105,10 @@ function App() {
     window.addEventListener("beforeinstallprompt", captureInstallPrompt);
     return () => window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
   }, []);
+  const workerCompleted = (item) =>
+    item.completionRecords?.some(
+      (record) => String(record.user?._id || record.user) === String(user?._id),
+    ) || false;
   const unread = notes.filter((n) => !n.readAt).length,
     sorted = useMemo(
       () =>
@@ -110,6 +117,10 @@ function App() {
         ),
       [works],
     );
+  const filteredWorks = useMemo(
+    () => filterWorkItems(sorted, searchTerm, assignmentFilter),
+    [sorted, searchTerm, assignmentFilter],
+  );
   const openServiceReports = () =>
     window.location.assign(new URL("/admin/service-call-reports", INVOICE_APP_URL).toString());
   const signIn = async (event) => {
@@ -138,7 +149,8 @@ function App() {
       item
         ? {
             ...item,
-            assignedTo: item.assignedTo?._id || "",
+            assignmentMode: item.assignmentMode || "specific",
+            assignedTo: item.assignedTo?._id || item.assignedTo || "",
             completedAt: item.completedAt
               ? new Date(item.completedAt).toLocaleDateString("en-CA")
               : today(),
@@ -147,6 +159,7 @@ function App() {
             scope: "",
             location: "",
             contactPerson: "",
+            assignmentMode: "specific",
             assignedTo: users.find((u) => u.active)?._id || "",
           },
     );
@@ -274,6 +287,11 @@ function App() {
           <button className="primary full" type="submit" disabled={loginBusy}>
             {loginBusy ? "Signing in…" : "Sign in"}
           </button>
+          {installPrompt && (
+            <button className="secondary full login-install" type="button" onClick={installApp}>
+              Install Field Desk
+            </button>
+          )}
           <p className="login-footnote">Your Field Desk account is managed by your administrator.</p>
         </form>
       </main>
@@ -377,7 +395,7 @@ function App() {
         {notice && <div className="success">{notice}</div>}
         {page === "work" && (
           <>
-            <div className="filter-row">
+            <div className="filter-row work-filters">
               <div className="seg">
                 <button
                   className={status === "pending" ? "selected" : ""}
@@ -392,20 +410,43 @@ function App() {
                   Completed
                 </button>
               </div>
+              <input
+                className="search"
+                type="search"
+                placeholder="Search work, location, contact"
+                aria-label="Search work, location, or contact person"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+              {isAdmin && (
+                <select
+                  className="assignment-filter"
+                  aria-label="Filter work assignment"
+                  value={assignmentFilter}
+                  onChange={(event) => setAssignmentFilter(event.target.value)}
+                >
+                  <option value="all">All assignments</option>
+                  <option value="any">Any worker</option>
+                  <option value="all-workers">All workers</option>
+                  {users.filter((u) => u.active).map((u) => (
+                    <option value={"worker:" + u._id} key={u._id}>Assigned to {u.name}</option>
+                  ))}
+                </select>
+              )}
               <span className="muted">
-                {sorted.length} {status}{" "}
-                {sorted.length === 1 ? "item" : "items"}
+                {filteredWorks.length} {status}{" "}
+                {filteredWorks.length === 1 ? "item" : "items"}
               </span>
             </div>
-            {sorted.length === 0 ? (
+            {filteredWorks.length === 0 ? (
               <div className="empty card">
                 <div className="empty-icon">✓</div>
-                <h2>All clear</h2>
-                <p>No {status} work right now.</p>
+                <h2>{sorted.length === 0 ? "All clear" : "No matching work"}</h2>
+                <p>{sorted.length === 0 ? `No ${status} work right now.` : "Try changing your search or assignment filter."}</p>
               </div>
             ) : (
               <div className="work-list">
-                {sorted.map((w) => (
+                {filteredWorks.map((w) => (
                   <article className="work-card card" key={w._id}>
                     <div className="card-top">
                       <span className={"status " + w.status}>{w.status}</span>
@@ -415,7 +456,9 @@ function App() {
                     <div className="details">
                       <span>⌖ {w.location}</span>
                       <span>♙ {w.contactPerson}</span>
-                      {isAdmin && <span>◉ {w.assignedTo?.name}</span>}
+                      {isAdmin && (
+                        <span>◉ {getAssignmentLabel(w)}</span>
+                      )}
                     </div>
                     {w.status === "completed" && (
                       <p className="done-date">
@@ -424,24 +467,25 @@ function App() {
                     )}
                     <div className="card-actions">
                       {!isAdmin && w.status === "pending" && (
-                        <>
-                          <label className="date-label">
-                            Completion date
-                            <input
-                              type="date"
-                              value={form.completedAt || today()}
-                              onChange={(e) =>
-                                setForm({
-                                  ...form,
-                                  completedAt: e.target.value,
-                                })
-                              }
-                            />
-                          </label>
-                          <button className="primary" onClick={() => toggle(w)}>
-                            Mark completed
-                          </button>
-                        </>
+                        w.assignmentMode === "all" && workerCompleted(w) ? (
+                          <span className="done-date">Completed by you · waiting for the team</span>
+                        ) : (
+                          <>
+                            <label className="date-label">
+                              Completion date
+                              <input
+                                type="date"
+                                value={form.completedAt || today()}
+                                onChange={(e) =>
+                                  setForm({ ...form, completedAt: e.target.value })
+                                }
+                              />
+                            </label>
+                            <button className="primary" onClick={() => toggle(w)}>
+                              Mark completed
+                            </button>
+                          </>
+                        )
                       )}
                       {isAdmin && (
                         <>
@@ -639,13 +683,20 @@ function App() {
                 <label>
                   Assign to
                   <select
-                    value={form.assignedTo || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, assignedTo: e.target.value })
-                    }
+                    value={form.assignmentMode === "specific" ? form.assignedTo || "" : form.assignmentMode}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setForm({
+                        ...form,
+                        assignmentMode: value === "any" || value === "all" ? value : "specific",
+                        assignedTo: value === "any" || value === "all" ? "" : value,
+                      });
+                    }}
                     required
                   >
-                    <option value="">Select worker</option>
+                    <option value="">Choose a worker</option>
+                    <option value="any">Any worker · one person completes it</option>
+                    <option value="all">All workers · everyone completes it</option>
                     {users
                       .filter((u) => u.active)
                       .map((u) => (

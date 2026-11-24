@@ -9,7 +9,7 @@ const schema = new mongoose.Schema(
     },
     kind: {
       type: String,
-      enum: ["completion", "daily-reminder"],
+      enum: ["assignment", "completion", "daily-reminder"],
       required: true,
     },
     title: { type: String, required: true },

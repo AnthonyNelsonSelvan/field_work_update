@@ -11,9 +11,13 @@ Local setup
 4. In production, host both frontends and APIs under one parent domain, for example invoice.example.com, field.example.com, api-invoice.example.com, and api-field.example.com. Set COOKIE_DOMAIN=.example.com in both backends, use the exact same JWT_SECRET and MONGO_URI in both backends, and set VITE_INVOICE_APP_URL to the deployed Invoice Generator frontend origin. Both apps must use HTTPS. If the apps use unrelated domains, the browser cannot share this cookie; use a shared parent domain or a central auth proxy.
 5. Sign in on Field Desk’s own login screen with an Invoice Generator account. Invoice roles admin, accountant, and superAdmin map to Field Desk Admin; staff maps to Worker. Field Desk admins can create staff accounts from the Team section; those accounts are created in the shared Invoice Generator employees collection and can sign into either app.
 
+Backend structure
+-----------------
+`backend/index.js` connects MongoDB, runs startup migration and reminder setup, and starts the server. `backend/app.js` configures Express middleware and mounts the route modules. `backend/routes/` maps URLs to controllers, `backend/controller/` contains request handlers, `backend/middleware/` contains authentication and request checks, and `backend/services/` holds shared identity, push, and reminder logic.
+
 Work access
 -----------
-Admins create, edit, delete, and assign work. Workers see their assigned work and can set its completion date. Field Desk is installable as a PWA using its web manifest and service worker. Install Field Desk from the browser install prompt (or the browser menu on iOS), then choose Enable push notifications on each device/browser. Completion notices go to subscribed admins, and once a day the backend sends a push to subscribed workers with pending work at DAILY_REMINDER_HOUR (default 9:00 AM India time). Notification records also remain in the in-app inbox. The Field Desk backend must stay running for scheduled reminders; push delivery requires valid VAPID settings and HTTPS in production.
+Admins can assign work to one worker, Any worker (the first worker to complete it closes the item), or All workers (each assigned worker must complete it). Assignment creates an in-app notification for each recipient and sends a PWA push to subscribed devices. Workers see their assigned work and can set its completion date. Field Desk is installable as a PWA using its web manifest and service worker. Workers must choose Enable push notifications on each device/browser to receive push alerts. Completion notices go to subscribed admins, and once a day the backend sends a push to subscribed workers with pending work at DAILY_REMINDER_HOUR (default 9:00 AM India time). Notification records also remain in the in-app inbox. The Field Desk backend must stay running for scheduled reminders; push delivery requires valid VAPID settings and HTTPS in production.
 
 Service Call Reports
 --------------------

@@ -41,3 +41,7 @@ html,body,#root,.app{width:210mm!important;height:297mm!important;min-height:0!i
 .success{padding:11px 13px;background:#eaf5ee;color:#23764c;border-radius:8px;margin:12px 0;font-size:12px}
 
 .password-field{position:relative}.password-field input{padding-right:64px!important}.password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-20%);border:0;background:transparent;color:#174a3b;font-size:12px;font-weight:700;padding:6px}.login-footnote{margin:18px 0 0;text-align:center;color:#8a929d;font-size:11px}
+
+.login-install{margin-top:10px}
+
+.work-filters{flex-wrap:wrap}.work-filters .search{flex:1;min-width:180px}.assignment-filter{max-width:220px;border:1px solid #dfe4e8;background:white;border-radius:8px;padding:9px 10px;color:#475363;font-size:12px}@media(max-width:640px){.work-filters{align-items:center;gap:9px}.work-filters .search{order:2;flex-basis:100%;max-width:none}.work-filters .assignment-filter{order:3;flex:1;max-width:none}.work-filters>.muted{order:4;width:100%;text-align:right;margin:0}}
