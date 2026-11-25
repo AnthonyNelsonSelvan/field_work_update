@@ -1,6 +1,8 @@
 import "dotenv/config";
 
 const production = process.env.NODE_ENV === "production";
+const sessionDays = Number(process.env.SESSION_DAYS || 365);
+const sessionDurationDays = Number.isInteger(sessionDays) && sessionDays > 0 ? sessionDays : 365;
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || "";
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || "";
 
@@ -13,6 +15,7 @@ if (Boolean(vapidPublicKey) !== Boolean(vapidPrivateKey)) {
 
 export const config = {
   port: Number(process.env.PORT || 3001),
+  sessionDurationDays,
   mongoUri: process.env.MONGO_URI,
   jwtSecret: process.env.JWT_SECRET,
   corsOrigins: (process.env.CORS_ORIGIN || "http://localhost:5174")
@@ -23,7 +26,7 @@ export const config = {
     httpOnly: true,
     sameSite: production ? "strict" : "lax",
     secure: production,
-    maxAge: 24 * 60 * 60 * 1000,
+    maxAge: sessionDurationDays * 24 * 60 * 60 * 1000,
     path: "/",
     ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
   },

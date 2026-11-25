@@ -7,6 +7,7 @@ import { config } from "../config.js";
 import { getFieldDeskRole, normalizeInvoiceRole, syncFieldUser } from "../services/fieldUsers.js";
 
 const loginAttempts = new Map();
+const sessionDuration = () => config.sessionDurationDays + "d";
 const loginWindowMs = 15 * 60 * 1000;
 const maxLoginAttempts = 10;
 
@@ -57,7 +58,7 @@ export async function login(req, res) {
   const token = jwt.sign(
     { _id: employeeId, id: employeeId, name: employee.name, role: invoiceRole },
     config.jwtSecret,
-    { expiresIn: "1d" },
+    { expiresIn: sessionDuration() },
   );
   const csrfToken = crypto.randomBytes(32).toString("hex");
   res.cookie("token", token, config.cookieOptions);

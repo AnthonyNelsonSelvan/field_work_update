@@ -13,7 +13,7 @@ Local setup
 
 Backend structure
 -----------------
-`backend/index.js` connects MongoDB, runs startup migration and reminder setup, and starts the server. `backend/app.js` configures Express middleware and mounts the route modules. `backend/routes/` maps URLs to controllers, `backend/controller/` contains request handlers, `backend/middleware/` contains authentication and request checks, and `backend/services/` holds shared identity, push, and reminder logic.
+`backend/index.js` connects MongoDB, runs startup migration and reminder setup, and starts the server. Field Desk login sessions default to 365 days (`SESSION_DAYS`) and the cookie and JWT use the same duration. This applies to sessions issued by Field Desk; Invoice Generator login settings are separate. `backend/app.js` configures Express middleware and mounts the route modules. `backend/routes/` maps URLs to controllers, `backend/controller/` contains request handlers, `backend/middleware/` contains authentication and request checks, and `backend/services/` holds shared identity, push, and reminder logic.
 
 Work access
 -----------

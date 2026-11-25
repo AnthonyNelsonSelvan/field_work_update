@@ -33,6 +33,7 @@ services:
       PORT: 3001
       CORS_ORIGIN: ${FIELD_DESK_URL:?Set FIELD_DESK_URL}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:?Set the shared parent cookie domain}
+      SESSION_DAYS: ${SESSION_DAYS:-365}
       DAILY_REMINDER_HOUR: ${DAILY_REMINDER_HOUR:-9}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Set the VAPID public key}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Set the VAPID private key}
