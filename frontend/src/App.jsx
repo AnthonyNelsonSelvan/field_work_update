@@ -322,15 +322,28 @@ function App() {
       const { data } = await api.get("/push/vapid-public-key");
       const registration = await navigator.serviceWorker.ready;
       let subscription = await registration.pushManager.getSubscription();
+      const serverKey = applicationServerKey(data.publicKey);
+      const installedKey = subscription?.options?.applicationServerKey;
+      const keyMatches =
+        !installedKey ||
+        (new Uint8Array(installedKey).length === serverKey.length &&
+          new Uint8Array(installedKey).every((byte, index) => byte === serverKey[index]));
+      if (subscription && !keyMatches) {
+        const oldEndpoint = subscription.endpoint;
+        await subscription.unsubscribe();
+        await api.delete("/push/subscriptions", { data: { endpoint: oldEndpoint } });
+        subscription = null;
+      }
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: applicationServerKey(data.publicKey),
+          applicationServerKey: serverKey,
         });
       }
       await api.post("/push/subscriptions", subscription.toJSON());
       setPushEnabled(true);
-      setNotice("Push notifications are enabled on this device.");
+      const { data: testResult } = await api.post("/push/test");
+      setNotice(testResult.message);
     } catch (e) {
       setError(e.response?.data?.message || "Could not enable push notifications.");
     }
@@ -404,8 +417,8 @@ function App() {
           <button
             className="icon-btn"
             onClick={enable}
-            title={pushEnabled ? "Push notifications enabled" : "Enable push notifications"}
-            aria-label={pushEnabled ? "Push notifications enabled" : "Enable push notifications"}
+            title={pushEnabled ? "Send a push test notification" : "Enable notifications and send a test"}
+            aria-label={pushEnabled ? "Send a push test notification" : "Enable notifications and send a test"}
           >
             {pushEnabled ? "♧✓" : "♧"}
           </button>

@@ -15,10 +15,12 @@ if (config.vapidPublicKey && config.vapidPrivateKey) {
 }
 
 export async function sendPushToUser(userId, data) {
-  if (!config.vapidPublicKey || !config.vapidPrivateKey) return;
+  if (!config.vapidPublicKey || !config.vapidPrivateKey) {
+    return { subscriptionCount: 0, sentCount: 0, failures: ["VAPID keys are not configured."] };
+  }
 
   const subscriptions = await PushSubscription.find({ user: userId });
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     subscriptions.map(async (subscription) => {
       try {
         await webpush.sendNotification(
@@ -30,15 +32,28 @@ export async function sendPushToUser(userId, data) {
           JSON.stringify(data),
           { TTL: 86400 },
         );
+        return true;
       } catch (error) {
         if ([404, 410].includes(error.statusCode)) {
           await PushSubscription.deleteOne({ _id: subscription._id });
-        } else {
-          console.error("Web push delivery failed", error.statusCode || error.message);
         }
+        throw error;
       }
     }),
   );
+  const failures = results
+    .filter((result) => result.status === "rejected")
+    .map((result) => {
+      const error = result.reason;
+      const status = error?.statusCode;
+      console.error("Web push delivery failed", status || error?.message);
+      return status ? `Push service returned HTTP ${status}.` : "Push delivery failed; check backend logs.";
+    });
+  return {
+    subscriptionCount: subscriptions.length,
+    sentCount: results.filter((result) => result.status === "fulfilled").length,
+    failures,
+  };
 }
 
 export async function notifyUsers(
