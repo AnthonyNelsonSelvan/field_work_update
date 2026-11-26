@@ -4,6 +4,7 @@ const schema = new mongoose.Schema(
     scope: { type: String, required: true, trim: true, maxlength: 1000 },
     location: { type: String, required: true, trim: true, maxlength: 300 },
     contactPerson: { type: String, required: true, trim: true, maxlength: 200 },
+    scheduledDate: { type: Date, default: null },
     assignmentMode: {
       type: String,
       enum: ["specific", "any", "all"],

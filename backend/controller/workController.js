@@ -6,6 +6,13 @@ import { notifyUsers } from "../services/pushNotifications.js";
 
 const assignmentModes = ["specific", "any", "all"];
 
+function parseDateOnly(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.toISOString().slice(0, 10) === value ? date : null;
+}
+
 async function getActiveWorkers() {
   return User.find({ role: "worker", active: true }).select("_id");
 }
@@ -37,11 +44,12 @@ export async function createWork(req, res) {
   const scope = String(req.body.scope || "").trim();
   const location = String(req.body.location || "").trim();
   const contactPerson = String(req.body.contactPerson || "").trim();
+  const scheduledDate = parseDateOnly(req.body.scheduledDate);
   const assignmentMode = req.body.assignmentMode || "specific";
 
-  if (!scope || !location || !contactPerson) {
+  if (!scope || !location || !contactPerson || !scheduledDate) {
     return res.status(400).json({
-      message: "Scope, location, and contact person are required.",
+      message: "Scope, location, contact person, and scheduled date are required.",
     });
   }
   if (!assignmentModes.includes(assignmentMode)) {
@@ -77,6 +85,7 @@ export async function createWork(req, res) {
     scope,
     location,
     contactPerson,
+    scheduledDate,
     assignmentMode,
     assignedTo,
     assignedUsers,
@@ -148,6 +157,16 @@ async function updateAsAdmin(work, body) {
   for (const field of ["scope", "location", "contactPerson"]) {
     if (body[field] !== undefined) {
       work[field] = String(body[field]).trim();
+    }
+  }
+
+  if (body.scheduledDate !== undefined) {
+    if (!body.scheduledDate) {
+      work.scheduledDate = null;
+    } else {
+      const scheduledDate = parseDateOnly(body.scheduledDate);
+      if (!scheduledDate) return { error: "Choose a valid scheduled date." };
+      work.scheduledDate = scheduledDate;
     }
   }
 

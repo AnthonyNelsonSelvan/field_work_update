@@ -6,6 +6,7 @@ import csrfProtection from "./middleware/csrfProtection.js";
 import errorHandler from "./middleware/errorHandler.js";
 import authRoutes from "./routes/authRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import meetingRoutes from "./routes/meetingRoutes.js";
 import pushRoutes from "./routes/pushRoutes.js";
 import systemRoutes from "./routes/systemRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
@@ -33,6 +34,7 @@ app.use("/api/push", pushRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/work", workRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/meetings", meetingRoutes);
 app.use("/api", systemRoutes);
 
 app.use(errorHandler);

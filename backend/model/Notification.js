@@ -9,7 +9,7 @@ const schema = new mongoose.Schema(
     },
     kind: {
       type: String,
-      enum: ["assignment", "completion", "daily-reminder"],
+      enum: ["assignment", "completion", "daily-reminder", "meeting-reminder"],
       required: true,
     },
     title: { type: String, required: true },
@@ -19,6 +19,7 @@ const schema = new mongoose.Schema(
       ref: "WorkItem",
       default: null,
     },
+    meeting: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", default: null },
     readAt: { type: Date, default: null },
     dayKey: { type: String, default: null },
   },

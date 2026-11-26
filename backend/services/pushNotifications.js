@@ -43,7 +43,7 @@ export async function sendPushToUser(userId, data) {
 
 export async function notifyUsers(
   userIds,
-  { kind, title, message, workItem, pushBody, tag },
+  { kind, title, message, workItem, meeting, pushBody, tag },
 ) {
   const ids = [...new Set(userIds.map(String).filter(Boolean))];
   if (!ids.length) return;
@@ -51,7 +51,7 @@ export async function notifyUsers(
   let notifications;
   try {
     notifications = await Note.insertMany(
-      ids.map((user) => ({ user, kind, title, message, workItem })),
+      ids.map((user) => ({ user, kind, title, message, workItem, meeting })),
     );
   } catch (error) {
     console.error("Could not save work notifications", error);

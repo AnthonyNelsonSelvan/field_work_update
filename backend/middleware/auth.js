@@ -41,6 +41,11 @@ export async function authenticate(req, res, next) {
   }
 }
 
+export function requireSuperAdmin(req, res, next) {
+  if (req.user?.invoiceRole === "superAdmin") return next();
+  return res.status(403).json({ message: "Super admin access required." });
+}
+
 export function requireAdmin(req, res, next) {
   if (req.user?.role === "admin") return next();
   return res.status(403).json({ message: "Admin access required." });

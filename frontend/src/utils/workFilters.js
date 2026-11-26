@@ -34,6 +34,7 @@ export function filterWorkItems(items, searchTerm, assignmentFilter) {
       item.scope,
       item.location,
       item.contactPerson,
+      item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString() : "",
       item.assignedTo?.name,
       mode === "any" ? "any worker" : "",
       mode === "all" ? "all workers" : "",

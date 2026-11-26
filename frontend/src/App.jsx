@@ -18,6 +18,33 @@ api.interceptors.request.use((c) => {
   return c;
 });
 const today = () => new Date().toLocaleDateString("en-CA");
+const indiaDateTimeParts = (value) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const part = (type) => parts.find((item) => item.type === type)?.value || "";
+  return {
+    date: `${part("year")}-${part("month")}-${part("day")}`,
+    time: `${part("hour")}:${part("minute")}`,
+  };
+};
+const indiaDateTimeToIso = (date, time) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || "");
+  const clock = /^(\d{2}):(\d{2})$/.exec(time || "");
+  if (!match || !clock) return null;
+  const [, year, month, day] = match;
+  const [, hour, minute] = clock;
+  const utc = Date.UTC(+year, +month - 1, +day, +hour, +minute) - 330 * 60 * 1000;
+  const result = new Date(utc);
+  if (result.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) === "Invalid Date") return null;
+  return result.toISOString();
+};
 const applicationServerKey = (base64) => {
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = window.atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
@@ -36,6 +63,7 @@ function App() {
     [assignmentFilter, setAssignmentFilter] = useState("all"),
     [works, setWorks] = useState([]),
     [users, setUsers] = useState([]),
+    [meetings, setMeetings] = useState([]),
     [notes, setNotes] = useState([]),
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
@@ -49,6 +77,7 @@ function App() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const isAdmin = user?.role === "admin";
+  const isSuperAdmin = user?.invoiceRole === "superAdmin";
   const load = useCallback(async () => {
     if (!user) return;
     try {
@@ -84,6 +113,16 @@ function App() {
         .then((r) => setUsers(r.data))
         .catch(() => {});
   }, [isAdmin]);
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setMeetings([]);
+      return;
+    }
+    api
+      .get("/meetings")
+      .then((response) => setMeetings(response.data))
+      .catch((e) => setError(e.response?.data?.message || "Could not load meetings."));
+  }, [isSuperAdmin]);
   useEffect(() => {
     if (!user || !("serviceWorker" in navigator)) return;
     let active = true;
@@ -144,6 +183,39 @@ function App() {
     await api.post("/auth/logout");
     setUser(null);
   };
+  const openMeeting = (item) => {
+    if (item) {
+      const { date, time } = indiaDateTimeParts(item.scheduledAt);
+      setForm({
+        ...item,
+        meetingDate: date,
+        meetingTime: time,
+      });
+    } else {
+      setForm({
+        client: "",
+        location: "",
+        purpose: "",
+        meetingDate: indiaDateTimeParts(new Date()).date,
+        meetingTime: "09:00",
+      });
+    }
+    setModal("meeting");
+  };
+  const removeMeeting = async (id) => {
+    if (!confirm("Delete this meeting and its future reminders?")) return;
+    try {
+      await api.delete("/meetings/" + id);
+      setMeetings((current) => current.filter((meeting) => meeting._id !== id));
+    } catch (e) {
+      setError(e.response?.data?.message || "Could not delete the meeting.");
+    }
+  };
+  const refreshMeetings = async () => {
+    const response = await api.get("/meetings");
+    setMeetings(response.data);
+  };
+
   const openWork = (item) => {
     setForm(
       item
@@ -151,6 +223,9 @@ function App() {
             ...item,
             assignmentMode: item.assignmentMode || "specific",
             assignedTo: item.assignedTo?._id || item.assignedTo || "",
+            scheduledDate: item.scheduledDate
+              ? new Date(item.scheduledDate).toLocaleDateString("en-CA")
+              : "",
             completedAt: item.completedAt
               ? new Date(item.completedAt).toLocaleDateString("en-CA")
               : today(),
@@ -161,6 +236,7 @@ function App() {
             contactPerson: "",
             assignmentMode: "specific",
             assignedTo: users.find((u) => u.active)?._id || "",
+            scheduledDate: today(),
           },
     );
     setModal("work");
@@ -173,10 +249,26 @@ function App() {
       if (modal === "work") {
         if (form._id) await api.patch("/work/" + form._id, form);
         else await api.post("/work", form);
-      } else if (modal === "user") await api.post("/users", form);
+      } else if (modal === "meeting") {
+        const scheduledAt = indiaDateTimeToIso(form.meetingDate, form.meetingTime);
+        if (!scheduledAt) {
+          throw new Error("Choose a valid meeting date and time.");
+        }
+        const payload = {
+          client: form.client,
+          location: form.location,
+          purpose: form.purpose,
+          scheduledAt,
+        };
+        if (form._id) await api.patch("/meetings/" + form._id, payload);
+        else await api.post("/meetings", payload);
+      } else if (modal === "user") {
+        await api.post("/users", form);
+      }
       setModal("");
-      await load();
+      if (modal === "work") await load();
       if (modal === "user") setUsers((await api.get("/users")).data);
+      if (modal === "meeting") await refreshMeetings();
     } catch (e) {
       setError(e.response?.data?.message || "Could not save changes.");
     } finally {
@@ -347,23 +439,32 @@ function App() {
             <h1>
               {page === "work"
                 ? "Your work"
-                : page === "reports"
-                  ? "Service call reports"
-                  : page === "team"
-                    ? "Team members"
-                    : "Notifications"}
+                : page === "meetings"
+                  ? "Meetings"
+                  : page === "reports"
+                    ? "Service call reports"
+                    : page === "team"
+                      ? "Team members"
+                      : "Notifications"}
             </h1>
             <p className="muted">
               {page === "work"
                 ? isAdmin
                   ? "Keep the team moving."
                   : "Here is what needs your attention."
-                : "A clear view of field operations."}
+                : page === "meetings"
+                  ? "Your upcoming client meetings and reminders."
+                  : "A clear view of field operations."}
             </p>
           </div>
           {isAdmin && page === "work" && (
             <button className="primary" onClick={() => openWork()}>
               ＋ <span>New work</span>
+            </button>
+          )}
+          {isSuperAdmin && page === "meetings" && (
+            <button className="primary" onClick={() => openMeeting()}>
+              ＋ <span>Schedule meeting</span>
             </button>
           )}
         </div>
@@ -385,6 +486,14 @@ function App() {
           >
             Team
           </button>
+          {isSuperAdmin && (
+            <button
+              className={page === "meetings" ? "active" : ""}
+              onClick={() => setPage("meetings")}
+            >
+              Meetings
+            </button>
+          )}
         </nav>
         {error && (
           <div className="error">
@@ -456,6 +565,9 @@ function App() {
                     <div className="details">
                       <span>⌖ {w.location}</span>
                       <span>♙ {w.contactPerson}</span>
+                      {w.scheduledDate && (
+                        <span>◷ Scheduled {new Date(w.scheduledDate).toLocaleDateString()}</span>
+                      )}
                       {isAdmin && (
                         <span>◉ {getAssignmentLabel(w)}</span>
                       )}
@@ -509,6 +621,38 @@ function App() {
               </div>
             )}
           </>
+        )}
+        {page === "meetings" && isSuperAdmin && (
+          <section className="meeting-list">
+            {meetings.length === 0 ? (
+              <div className="empty card">
+                <div className="empty-icon">◷</div>
+                <h2>No upcoming meetings</h2>
+                <p>Schedule a client meeting to receive reminders.</p>
+                <button className="primary" onClick={() => openMeeting()}>
+                  Schedule meeting
+                </button>
+              </div>
+            ) : (
+              meetings.map((meeting) => (
+                <article className="meeting-card card" key={meeting._id}>
+                  <div className="card-top">
+                    <span className="meeting-label">Client meeting</span>
+                    <time>{new Date(meeting.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })} IST</time>
+                  </div>
+                  <h2>{meeting.client}</h2>
+                  <div className="details">
+                    <span>⌖ {meeting.location}</span>
+                    <span>▤ {meeting.purpose}</span>
+                  </div>
+                  <div className="card-actions">
+                    <button className="secondary" onClick={() => openMeeting(meeting)}>Edit</button>
+                    <button className="danger" onClick={() => removeMeeting(meeting._id)}>Delete</button>
+                  </div>
+                </article>
+              ))
+            )}
+          </section>
         )}
         {page === "reports" && (
           <section className="card">
@@ -595,6 +739,14 @@ function App() {
         >
           ♙<span>Team</span>
         </button>
+        {isSuperAdmin && (
+          <button
+            onClick={() => setPage("meetings")}
+            className={page === "meetings" ? "active" : ""}
+          >
+            ◷<span>Meetings</span>
+          </button>
+        )}
         <button
           onClick={() => setPage("alerts")}
           className={page === "alerts" ? "active" : ""}
@@ -611,7 +763,11 @@ function App() {
           >
             <div className="section-head">
               <h2>
-                {modal === "user" ? "Add worker" : form._id ? "Edit work" : "New work"}
+                {modal === "user"
+                  ? "Add worker"
+                  : modal === "meeting"
+                    ? form._id ? "Edit meeting" : "Schedule meeting"
+                    : form._id ? "Edit work" : "New work"}
               </h2>
               <button
                 type="button"
@@ -647,6 +803,61 @@ function App() {
                   </small>
                 </label>
               </>
+            ) : modal === "meeting" ? (
+              <>
+                <label>
+                  Client
+                  <input
+                    value={form.client || ""}
+                    onChange={(event) => setForm({ ...form, client: event.target.value })}
+                    maxLength="200"
+                    required
+                  />
+                </label>
+                <div className="meeting-date-time">
+                  <label>
+                    Meeting date
+                    <input
+                      type="date"
+                      value={form.meetingDate || ""}
+                      onChange={(event) => setForm({ ...form, meetingDate: event.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Meeting time
+                    <input
+                      type="time"
+                      value={form.meetingTime || ""}
+                      onChange={(event) => setForm({ ...form, meetingTime: event.target.value })}
+                      required
+                    />
+                  </label>
+                </div>
+                <small className="meeting-timezone">Times are in India Standard Time (IST). Reminders go to super admins.</small>
+                <label>
+                  Location
+                  <input
+                    value={form.location || ""}
+                    onChange={(event) => setForm({ ...form, location: event.target.value })}
+                    maxLength="300"
+                    required
+                  />
+                </label>
+                <label>
+                  Meeting purpose
+                  <textarea
+                    rows="3"
+                    value={form.purpose || ""}
+                    onChange={(event) => setForm({ ...form, purpose: event.target.value })}
+                    maxLength="2000"
+                    required
+                  />
+                </label>
+                <div className="meeting-reminder-note">
+                  Reminders: 24h, 12h, 6h, 3h, and 30 minutes before. The 30-minute alert is marked final.
+                </div>
+              </>
             ) : (
               <>
                 <label>
@@ -678,6 +889,17 @@ function App() {
                       setForm({ ...form, contactPerson: e.target.value })
                     }
                     required
+                  />
+                </label>
+                <label>
+                  Scheduled date
+                  <input
+                    type="date"
+                    value={form.scheduledDate || ""}
+                    onChange={(event) =>
+                      setForm({ ...form, scheduledDate: event.target.value })
+                    }
+                    required={!form._id}
                   />
                 </label>
                 <label>
@@ -721,7 +943,9 @@ function App() {
                   ? "Saving…"
                   : modal === "user"
                     ? "Create account"
-                    : "Save changes"}
+                    : modal === "meeting"
+                      ? form._id ? "Save meeting" : "Schedule meeting"
+                      : "Save changes"}
               </button>
             </div>
           </form>
