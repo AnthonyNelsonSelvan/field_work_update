@@ -1,6 +1,4 @@
-import InvoiceEmployee from "../model/InvoiceEmployee.js";
 import Meeting from "../model/Meeting.js";
-import { syncFieldUser } from "../services/fieldUsers.js";
 import { notifyUsers } from "../services/pushNotifications.js";
 
 const finalReminderMs = 30 * 60 * 1000;
@@ -8,14 +6,6 @@ const finalReminderMs = 30 * 60 * 1000;
 function parseMeetingDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-async function getSuperAdminUserIds() {
-  const employees = await InvoiceEmployee.find({ role: "superAdmin" }).select("name role");
-  const users = await Promise.all(
-    employees.map((employee) => syncFieldUser(employee, "admin")),
-  );
-  return users.map((user) => user._id);
 }
 
 function getMeetingMessage(meeting) {
@@ -28,7 +18,10 @@ function getMeetingMessage(meeting) {
 }
 
 export async function listMeetings(req, res) {
-  const meetings = await Meeting.find({ scheduledAt: { $gte: new Date() } })
+  const meetings = await Meeting.find({
+    createdBy: req.user.id,
+    scheduledAt: { $gte: new Date() },
+  })
     .sort({ scheduledAt: 1 });
   res.json(meetings);
 }
@@ -48,20 +41,19 @@ export async function createMeeting(req, res) {
     return res.status(400).json({ message: "Choose a future meeting date and time." });
   }
 
-  const notifyUsersList = await getSuperAdminUserIds();
   const meeting = await Meeting.create({
     scheduledAt,
     client,
     location,
     purpose,
     createdBy: req.user.id,
-    notifyUsers: notifyUsersList,
+    notifyUsers: [req.user.id],
   });
 
   if (scheduledAt.getTime() - Date.now() <= finalReminderMs) {
     meeting.remindersSent.push("30m");
     await meeting.save();
-    await notifyUsers(notifyUsersList, {
+    await notifyUsers([req.user.id], {
       kind: "meeting-reminder",
       title: "Final meeting reminder",
       message: getMeetingMessage(meeting),
@@ -75,7 +67,7 @@ export async function createMeeting(req, res) {
 }
 
 export async function updateMeeting(req, res) {
-  const meeting = await Meeting.findById(req.params.id);
+  const meeting = await Meeting.findOne({ _id: req.params.id, createdBy: req.user.id });
   if (!meeting) return res.status(404).json({ message: "Meeting not found." });
 
   const client = String(req.body.client || "").trim();
@@ -96,6 +88,7 @@ export async function updateMeeting(req, res) {
   meeting.location = location;
   meeting.purpose = purpose;
   meeting.scheduledAt = scheduledAt;
+  meeting.notifyUsers = [meeting.createdBy];
   if (scheduleChanged) {
     meeting.remindersSent = [];
     meeting.remindersStartAt = new Date();
@@ -105,7 +98,7 @@ export async function updateMeeting(req, res) {
   if (scheduleChanged && scheduledAt.getTime() - Date.now() <= finalReminderMs) {
     meeting.remindersSent.push("30m");
     await meeting.save();
-    await notifyUsers(meeting.notifyUsers, {
+    await notifyUsers([req.user.id], {
       kind: "meeting-reminder",
       title: "Final meeting reminder",
       message: getMeetingMessage(meeting),
@@ -118,7 +111,7 @@ export async function updateMeeting(req, res) {
 }
 
 export async function deleteMeeting(req, res) {
-  const meeting = await Meeting.findByIdAndDelete(req.params.id);
+  const meeting = await Meeting.findOneAndDelete({ _id: req.params.id, createdBy: req.user.id });
   if (!meeting) return res.status(404).json({ message: "Meeting not found." });
   res.json({ ok: true });
 }

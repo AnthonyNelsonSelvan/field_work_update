@@ -466,7 +466,7 @@ function App() {
                   ? "Keep the team moving."
                   : "Here is what needs your attention."
                 : page === "meetings"
-                  ? "Your upcoming client meetings and reminders."
+                  ? "Your upcoming meetings and private reminders."
                   : "A clear view of field operations."}
             </p>
           </div>
@@ -847,7 +847,7 @@ function App() {
                     />
                   </label>
                 </div>
-                <small className="meeting-timezone">Times are in India Standard Time (IST). Reminders go to super admins.</small>
+                <small className="meeting-timezone">Times are in India Standard Time (IST). Only you can see this meeting and its reminders.</small>
                 <label>
                   Location
                   <input

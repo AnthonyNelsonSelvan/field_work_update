@@ -43,9 +43,8 @@ async function processMeetingReminders() {
       );
       if (claim.modifiedCount !== 1) continue;
 
-      const recipients = meeting.notifyUsers?.length
-        ? meeting.notifyUsers
-        : [meeting.createdBy];
+      // Meeting reminders are private to the super admin who created the meeting.
+      const recipients = [meeting.createdBy];
       const isFinal = stage.key === "30m";
       await notifyUsers(recipients, {
         kind: "meeting-reminder",
