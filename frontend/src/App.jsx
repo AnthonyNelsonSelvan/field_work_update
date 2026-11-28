@@ -64,7 +64,11 @@ function App() {
     [works, setWorks] = useState([]),
     [users, setUsers] = useState([]),
     [meetings, setMeetings] = useState([]),
+    [meetingView, setMeetingView] = useState("upcoming"),
     [notes, setNotes] = useState([]),
+    [notesPage, setNotesPage] = useState(1),
+    [notesPages, setNotesPages] = useState(1),
+    [unreadTotal, setUnreadTotal] = useState(0),
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
     [form, setForm] = useState({ completedAt: today() }),
@@ -83,14 +87,17 @@ function App() {
     try {
       const [w, n] = await Promise.all([
         api.get("/work", { params: { status } }),
-        api.get("/notifications"),
+        api.get("/notifications", { params: { page: notesPage } }),
       ]);
       setWorks(w.data);
-      setNotes(n.data);
+      setNotes(n.data.notifications);
+      setNotesPage(n.data.page);
+      setNotesPages(n.data.pages);
+      setUnreadTotal(n.data.unread);
     } catch (e) {
       setError(e.response?.data?.message || "Could not load your data.");
     }
-  }, [user, status]);
+  }, [user, status, notesPage]);
   useEffect(() => {
     api
       .get("/auth/me")
@@ -119,10 +126,10 @@ function App() {
       return;
     }
     api
-      .get("/meetings")
+      .get("/meetings", { params: { view: meetingView } })
       .then((response) => setMeetings(response.data))
       .catch((e) => setError(e.response?.data?.message || "Could not load meetings."));
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, meetingView]);
   useEffect(() => {
     if (!user || !("serviceWorker" in navigator)) return;
     let active = true;
@@ -148,7 +155,7 @@ function App() {
     item.completionRecords?.some(
       (record) => String(record.user?._id || record.user) === String(user?._id),
     ) || false;
-  const unread = notes.filter((n) => !n.readAt).length,
+  const unread = unreadTotal,
     sorted = useMemo(
       () =>
         [...works].sort(
@@ -212,7 +219,7 @@ function App() {
     }
   };
   const refreshMeetings = async () => {
-    const response = await api.get("/meetings");
+    const response = await api.get("/meetings", { params: { view: meetingView } });
     setMeetings(response.data);
   };
 
@@ -637,20 +644,40 @@ function App() {
         )}
         {page === "meetings" && isSuperAdmin && (
           <section className="meeting-list">
+            <div className="seg meeting-views" role="tablist" aria-label="Meeting view">
+              <button
+                role="tab"
+                aria-selected={meetingView === "upcoming"}
+                className={meetingView === "upcoming" ? "selected" : ""}
+                onClick={() => setMeetingView("upcoming")}
+              >
+                Upcoming
+              </button>
+              <button
+                role="tab"
+                aria-selected={meetingView === "history"}
+                className={meetingView === "history" ? "selected" : ""}
+                onClick={() => setMeetingView("history")}
+              >
+                History
+              </button>
+            </div>
             {meetings.length === 0 ? (
               <div className="empty card">
                 <div className="empty-icon">◷</div>
-                <h2>No upcoming meetings</h2>
-                <p>Schedule a client meeting to receive reminders.</p>
-                <button className="primary" onClick={() => openMeeting()}>
-                  Schedule meeting
-                </button>
+                <h2>{meetingView === "history" ? "No past meetings" : "No upcoming meetings"}</h2>
+                <p>{meetingView === "history" ? "Past meetings will appear here." : "Schedule a client meeting to receive reminders."}</p>
+                {meetingView === "upcoming" && (
+                  <button className="primary" onClick={() => openMeeting()}>
+                    Schedule meeting
+                  </button>
+                )}
               </div>
             ) : (
               meetings.map((meeting) => (
                 <article className="meeting-card card" key={meeting._id}>
                   <div className="card-top">
-                    <span className="meeting-label">Client meeting</span>
+                    <span className="meeting-label">{meetingView === "history" ? "Past meeting" : "Client meeting"}</span>
                     <time>{new Date(meeting.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })} IST</time>
                   </div>
                   <h2>{meeting.client}</h2>
@@ -659,7 +686,9 @@ function App() {
                     <span>▤ {meeting.purpose}</span>
                   </div>
                   <div className="card-actions">
-                    <button className="secondary" onClick={() => openMeeting(meeting)}>Edit</button>
+                    {meetingView === "upcoming" && (
+                      <button className="secondary" onClick={() => openMeeting(meeting)}>Edit</button>
+                    )}
                     <button className="danger" onClick={() => removeMeeting(meeting._id)}>Delete</button>
                   </div>
                 </article>
@@ -730,6 +759,25 @@ function App() {
               <button className="secondary" onClick={readAll}>
                 Mark all read
               </button>
+            )}
+            {notesPages > 1 && (
+              <div className="notification-pagination" aria-label="Notification pages">
+                <button
+                  className="secondary"
+                  disabled={notesPage <= 1}
+                  onClick={() => setNotesPage((current) => current - 1)}
+                >
+                  Newer
+                </button>
+                <span>Page {notesPage} of {notesPages}</span>
+                <button
+                  className="secondary"
+                  disabled={notesPage >= notesPages}
+                  onClick={() => setNotesPage((current) => current + 1)}
+                >
+                  Older
+                </button>
+              </div>
             )}
           </section>
         )}
@@ -868,7 +916,7 @@ function App() {
                   />
                 </label>
                 <div className="meeting-reminder-note">
-                  Reminders: 24h, 12h, 6h, 3h, and 30 minutes before. The 30-minute alert is marked final.
+                  Reminders: 24h, 12h, 6h, 3h, and 30 minutes before; a final reminder arrives at meeting time.
                 </div>
               </>
             ) : (

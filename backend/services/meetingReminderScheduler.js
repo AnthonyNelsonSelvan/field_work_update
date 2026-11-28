@@ -7,6 +7,7 @@ const reminderStages = [
   { key: "6h", offsetMs: 6 * 60 * 60 * 1000, title: "Meeting reminder: 6 hours" },
   { key: "3h", offsetMs: 3 * 60 * 60 * 1000, title: "Meeting reminder: 3 hours" },
   { key: "30m", offsetMs: 30 * 60 * 1000, title: "Final meeting reminder" },
+  { key: "now", offsetMs: 0, title: "Final reminder: meeting is now" },
 ];
 
 function describeMeeting(meeting) {
@@ -24,7 +25,10 @@ function describeMeeting(meeting) {
 async function processMeetingReminders() {
   const now = new Date();
   const meetings = await Meeting.find({
-    scheduledAt: { $gt: now, $lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
+    scheduledAt: {
+      $gt: new Date(now.getTime() - 5 * 60 * 1000),
+      $lte: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+    },
   }).limit(500);
 
   for (const meeting of meetings) {
@@ -46,6 +50,7 @@ async function processMeetingReminders() {
       // Meeting reminders are private to the super admin who created the meeting.
       const recipients = [meeting.createdBy];
       const isFinal = stage.key === "30m";
+      const isStartingNow = stage.key === "now";
       await notifyUsers(recipients, {
         kind: "meeting-reminder",
         title: stage.title,
@@ -53,7 +58,9 @@ async function processMeetingReminders() {
         meeting: meeting._id,
         pushBody: isFinal
           ? "Final alert: " + meeting.client + " meeting starts in 30 minutes."
-          : meeting.client + " meeting is in " + stage.key + ".",
+          : isStartingNow
+            ? "You have a meeting with " + meeting.client + " right now."
+            : meeting.client + " meeting is in " + stage.key + ".",
         tag: "meeting-" + meeting._id + "-" + stage.key,
       });
     }

@@ -18,11 +18,13 @@ function getMeetingMessage(meeting) {
 }
 
 export async function listMeetings(req, res) {
+  const now = new Date();
+  const history = req.query.view === "history";
   const meetings = await Meeting.find({
     createdBy: req.user.id,
-    scheduledAt: { $gte: new Date() },
+    scheduledAt: history ? { $lt: now } : { $gte: now },
   })
-    .sort({ scheduledAt: 1 });
+    .sort({ scheduledAt: history ? -1 : 1 });
   res.json(meetings);
 }
 
